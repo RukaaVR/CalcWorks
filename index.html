@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CalcWorks</title>
+  
+  <!-- SECURITY ROUTING -->
+  <script>
+    if (window.location.hostname === '0.0.0.0') {
+      window.location.href = window.location.href.replace('0.0.0.0', 'localhost');
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: { 
+          sans: ['Outfit', 'sans-serif'],
+          mono: ['Fira Code', 'monospace']
+        },
+        extend: {
+          colors: {
+            brand: 'var(--theme-color)',
+            dark: '#050505',
+            panel: 'rgba(12, 12, 16, 0.75)',
+            card: 'rgba(20, 20, 25, 0.6)',
+          },
+          animation: {
+            'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'scanline': 'scanline 8s linear infinite',
+          },
+          keyframes: {
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(30px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            scanline: { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(100vh)' } }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --theme-color: #fc2651; --theme-glow: rgba(252, 38, 81, 0.4); }
+    [data-theme="green"] { --theme-color: #10b981; --theme-glow: rgba(16, 185, 129, 0.4); }
+    [data-theme="blue"] { --theme-color: #3b82f6; --theme-glow: rgba(59, 130, 246, 0.4); }
+    [data-theme="purple"] { --theme-color: #a855f7; --theme-glow: rgba(168, 85, 247, 0.4); }
+
+    /* Custom Cursor Hiding */
+    @media (pointer: fine) {
+      body, button, select, input { cursor: none !important; }
+      iframe { cursor: auto !important; } /* Let games have their own cursor */
+    }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--theme-color); }
+
+    .glass-panel { background: var(--panel); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.05); }
+    .glass-card { background: var(--card); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+    
+    .bg-mesh {
+      position: fixed; inset: 0; z-index: -1; background-color: #030303;
+      background-image: radial-gradient(circle at 15% 50%, var(--theme-glow), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255,255,255,0.02), transparent 25%);
+      transition: background-image 0.5s ease;
+    }
+
+    /* CRT Overlay Effect */
+    .crt-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: 0.15;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      background-size: 100% 4px, 3px 100%;
+    }
+
+    .game-tile { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .game-tile:hover { transform: translateY(-8px) scale(1.03); border-color: var(--theme-color); box-shadow: 0 15px 30px -10px rgba(0,0,0,0.8), 0 0 25px -5px var(--theme-glow); z-index: 30; }
+    
+    .hide-scroll::-webkit-scrollbar { display: none; }
+    .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Custom Cursor Elements */
+    #cursor-dot {
+      position: fixed; top: 0; left: 0; width: 6px; height: 6px; background-color: var(--theme-color); border-radius: 50%;
+      pointer-events: none; z-index: 9999; transform: translate(-50%, -50%); transition: width 0.2s, height 0.2s; box-shadow: 0 0 10px var(--theme-glow);
+    }
+    #cursor-outline {
+      position: fixed; top: 0; left: 0; width: 30px; height: 30px; border: 1.5px solid var(--theme-glow); border-radius: 50%;
+      pointer-events: none; z-index: 9998; transform: translate(-50%, -50%); transition: width 0.2s, height 0.2s, background-color 0.2s;
+    }
+    .cursor-hover #cursor-outline { width: 50px; height: 50px; background-color: rgba(255,255,255,0.05); border-color: var(--theme-color); }
+    .cursor-active #cursor-outline { width: 20px; height: 20px; background-color: var(--theme-glow); }
+  </style>
+</head>
+<body class="text-slate-300 min-h-screen flex overflow-hidden selection:bg-brand selection:text-white antialiased">
+
+  <!-- Custom Cursor -->
+  <div id="cursor-dot" class="hidden md:block"></div>
+  <div id="cursor-outline" class="hidden md:block"></div>
+
+  <!-- CRT Overlay -->
+  <div class="crt-overlay hidden md:block"></div>
+  <div class="fixed inset-0 w-full h-[10%] bg-white/5 blur-[100px] animate-scanline pointer-events-none z-40 hidden md:block"></div>
+
+  <!-- Boot Sequence Overlay -->
+  <div id="bootScreen" class="fixed inset-0 z-[100] bg-[#050505] flex flex-col justify-center p-10 font-mono text-sm transition-opacity duration-700">
+    <div id="bootLog" class="text-slate-500 space-y-2 max-w-2xl">
+      <p class="text-brand font-bold mb-4">CalcWorks Initialization Sequence</p>
+    </div>
+  </div>
+
+  <div class="bg-mesh"></div>
+
+  <!-- Sidebar -->
+  <aside class="w-20 lg:w-64 glass-panel border-r border-slate-800/40 flex-shrink-0 flex flex-col h-screen z-20 transition-all duration-300 relative">
+    <div class="p-6 flex items-center justify-center lg:justify-start gap-4">
+      <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center font-black text-brand shrink-0 shadow-[0_0_15px_var(--theme-glow)] transition-colors">
+        CW
+      </div>
+      <div class="hidden lg:block overflow-hidden">
+        <h1 class="text-lg font-black tracking-tighter text-white uppercase leading-none">Calc<span class="text-brand transition-colors">Works</span></h1>
+        <span class="text-[9px] font-mono text-slate-500 uppercase tracking-widest">TS PMO</span>
+      </div>
+    </div>
+    
+    <nav id="categoryNav" class="flex-1 overflow-y-auto hide-scroll px-4 space-y-1.5 pb-6 mt-4"></nav>
+    
+    <div class="p-4 border-t border-slate-800/40 space-y-2">
+      <button onclick="openSettings()" data-hover class="w-full flex items-center justify-center lg:justify-start gap-3 hover:bg-slate-800/50 text-xs font-bold uppercase tracking-wider py-3 px-3 rounded-xl transition-all border border-transparent hover:border-slate-700 group text-slate-500 hover:text-white">
+        <svg class="w-4 h-4 shrink-0 group-hover:animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <span class="hidden lg:block truncate">Settings</span>
+      </button>
+      
+      <button onclick="panic()" data-hover title="Or press '~' anywhere" class="w-full flex items-center justify-center lg:justify-start gap-3 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-bold uppercase tracking-wider py-3 px-3 rounded-xl transition-all border border-rose-500/20 hover:border-rose-500/50 group text-rose-500">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span class="hidden lg:block truncate">Panic</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Area -->
+  <main class="flex-1 flex flex-col h-screen relative z-10 overflow-hidden">
+    <!-- Topbar -->
+    <header class="h-20 glass-panel border-b border-slate-800/40 flex items-center justify-between px-6 lg:px-10 shrink-0 gap-4">
+      <div class="relative w-full max-w-xl group flex items-center">
+        <svg class="absolute left-4 w-4 h-4 text-slate-500 group-focus-within:text-brand transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="searchBar" data-hover type="text" placeholder="Search the database... (Press '/' to focus)" class="w-full bg-slate-900/30 border border-slate-700/30 text-white text-sm rounded-xl focus:ring-1 focus:ring-brand focus:border-brand block pl-11 pr-12 py-2.5 transition-all placeholder-slate-600 outline-none">
+      </div>
+
+      <div class="flex items-center gap-6 shrink-0">
+        <div class="hidden xl:flex items-center gap-2 text-[10px] font-mono font-bold text-slate-500 bg-slate-900/40 border border-slate-800/50 px-4 py-2 rounded-lg">
+          <span class="w-1.5 h-1.5 rounded-full bg-brand animate-ping transition-colors"></span>
+          <span>TIME <strong id="clock" class="text-slate-300">00:00:00</strong></span>
+        </div>
+        <select id="sortSelect" data-hover class="bg-slate-900/40 border border-slate-700/50 text-xs font-bold uppercase tracking-wider text-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-brand cursor-pointer hover:bg-slate-800 transition-colors appearance-none pr-8">
+          <option value="popular">Most Popular</option>
+          <option value="az">Alphabetical</option>
+          <option value="new">Latest Added</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Scrollable Game Grid -->
+    <div class="flex-1 overflow-y-auto px-6 lg:px-10 py-8 scroll-smooth" id="scrollContainer">
+      
+      <div id="recentWrapper" class="mb-10 hidden">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-1.5 h-4 bg-brand rounded-full transition-colors shadow-[0_0_10px_var(--theme-glow)]"></div>
+          <h2 class="text-sm font-extrabold uppercase tracking-widest text-white">Jump Back In</h2>
+        </div>
+        <div id="recentGrid" class="flex gap-4 overflow-x-auto hide-scroll pb-4 snap-x pt-2"></div>
+      </div>
+
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <div class="w-1.5 h-4 bg-slate-600 rounded-full"></div>
+          <h2 id="sectionTitle" class="text-sm font-extrabold uppercase tracking-widest text-slate-300">All Records</h2>
+          <span id="gameCount" class="ml-2 px-2 py-0.5 bg-slate-800/50 border border-slate-700/50 rounded text-[10px] font-mono font-bold text-slate-400">0</span>
+        </div>
+      </div>
+
+      <div id="loading" class="w-full flex flex-col items-center justify-center py-32 text-brand transition-colors">
+        <div class="w-10 h-10 border-2 border-slate-800 border-t-brand rounded-full animate-spin mb-4"></div>
+        <div class="font-mono tracking-widest uppercase text-[10px] animate-pulse text-slate-500">Querying Remote Repository...</div>
+      </div>
+
+      <div id="gameGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 pb-24 pt-2"></div>
+    </div>
+  </main>
+
+  <!-- Player Modal (Native Sandbox) -->
+  <div id="playerModal" class="fixed inset-0 z-[60] hidden bg-[#050505]/98 backdrop-blur-2xl flex flex-col transition-all duration-300 opacity-0">
+    <div class="h-14 glass-panel border-b border-slate-800/80 flex items-center justify-between px-6 shrink-0 z-20">
+      <div class="flex items-center gap-4">
+        <button id="closeBtn" data-hover title="Or press Escape" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 text-slate-400 hover:bg-rose-500 hover:text-white transition-all border border-slate-700/50 group">
+          <svg class="w-4 h-4 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div>
+          <h2 id="activeTitle" class="font-bold text-sm text-white tracking-wide truncate max-w-[200px] sm:max-w-md">Game</h2>
+          <p id="activeAuthor" class="text-[9px] text-brand font-mono uppercase tracking-widest">Environment Secured</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="newTabBtn" data-hover class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-slate-800/40 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700/50 hidden sm:block">External</button>
+        <button id="fullscreenBtn" data-hover class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-brand hover:bg-opacity-80 text-white rounded-lg transition-all shadow-[0_0_15px_var(--theme-glow)]">Expand</button>
+      </div>
+    </div>
+    
+    <div class="flex-1 w-full relative bg-black flex items-center justify-center overflow-hidden">
+      <div id="iframeLoading" class="absolute flex flex-col items-center gap-3 z-0">
+        <div class="w-12 h-12 border-3 border-slate-800 border-t-brand rounded-full animate-spin"></div>
+        <div class="text-slate-500 font-bold tracking-widest uppercase text-[10px] animate-pulse">Allocating Sandbox Memory...</div>
+      </div>
+      <iframe id="gameFrame" class="w-full h-full border-0 relative z-10 opacity-0 transition-opacity duration-700 bg-black" allow="autoplay; fullscreen; gamepad; pointer-lock; keyboard-map *;" allowfullscreen="true" scrolling="no"></iframe>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 transition-opacity duration-300">
+    <div class="w-full max-w-sm glass-card border border-slate-700/50 rounded-2xl p-6 shadow-2xl transform scale-95 transition-transform duration-300" id="settingsBox">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-lg font-black uppercase tracking-wider text-white">Settings</h3>
+        <button onclick="closeSettings()" data-hover class="text-slate-500 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></path></svg></button>
+      </div>
+      
+      <div class="space-y-6">
+        <div>
+          <label class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-3 block">Accent Theme</label>
+          <div class="flex gap-3">
+            <button data-hover onclick="setTheme('red')" class="w-10 h-10 rounded-full bg-[#fc2651] border-2 border-transparent focus:border-white transition-all hover:scale-110 shadow-[0_0_15px_rgba(252,38,81,0.4)]"></button>
+            <button data-hover onclick="setTheme('blue')" class="w-10 h-10 rounded-full bg-[#3b82f6] border-2 border-transparent focus:border-white transition-all hover:scale-110 shadow-[0_0_15px_rgba(59,130,246,0.4)]"></button>
+            <button data-hover onclick="setTheme('green')" class="w-10 h-10 rounded-full bg-[#10b981] border-2 border-transparent focus:border-white transition-all hover:scale-110 shadow-[0_0_15px_rgba(16,185,129,0.4)]"></button>
+            <button data-hover onclick="setTheme('purple')" class="w-10 h-10 rounded-full bg-[#a855f7] border-2 border-transparent focus:border-white transition-all hover:scale-110 shadow-[0_0_15px_rgba(168,85,247,0.4)]"></button>
+          </div>
+        </div>
+        
+        <div class="pt-4 border-t border-slate-800/50">
+          <p class="text-xs text-slate-400 mb-2 font-semibold">Panic Key Bind: <kbd class="bg-slate-800 px-2 py-0.5 rounded text-white font-mono">~</kbd> or <kbd class="bg-slate-800 px-2 py-0.5 rounded text-white font-mono">\`</kbd></p>
+          <p class="text-[10px] text-slate-500">Pressing this will instantly redirect your tab to hide your screen.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastTray" class="fixed bottom-6 right-6 z-[80] flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    const COVER_BASE = "https://cdn.jsdelivr.net/gh/freebuisness/covers@main";
+    const HTML_BASE = "./html"; 
+    const DIRECTORY_URL = "https://cdn.jsdelivr.net/gh/freebuisness/assets@main/zones.json";
+    const STATS_URL = "https://data.jsdelivr.com/v1/stats/packages/gh/freebuisness/html@main/files?period=year";
+
+    const state = {
+      catalog: [], stats: {}, 
+      favorites: JSON.parse(localStorage.getItem('cw_favs') || '[]'),
+      recent: JSON.parse(localStorage.getItem('cw_recent') || '[]'),
+      category: 'all', search: '', sort: 'popular',
+      theme: localStorage.getItem('cw_theme') || 'red'
+    };
+
+    const DOM = {
+      grid: document.getElementById('gameGrid'), recentGrid: document.getElementById('recentGrid'),
+      recentWrapper: document.getElementById('recentWrapper'), loading: document.getElementById('loading'),
+      search: document.getElementById('searchBar'), sort: document.getElementById('sortSelect'),
+      nav: document.getElementById('categoryNav'), title: document.getElementById('sectionTitle'),
+      count: document.getElementById('gameCount'), modal: document.getElementById('playerModal'),
+      frame: document.getElementById('gameFrame'), mTitle: document.getElementById('activeTitle'),
+      mAuthor: document.getElementById('activeAuthor'), clock: document.getElementById('clock'),
+      toastTray: document.getElementById('toastTray'), bootScreen: document.getElementById('bootScreen'),
+      bootLog: document.getElementById('bootLog'),
+      cDot: document.getElementById('cursor-dot'), cOutline: document.getElementById('cursor-outline')
+    };
+
+    // --- Cursor Physics ---
+    let cursorX = window.innerWidth / 2, cursorY = window.innerHeight / 2;
+    let dotX = cursorX, dotY = cursorY, outlineX = cursorX, outlineY = cursorY;
+
+    window.addEventListener('mousemove', (e) => {
+      cursorX = e.clientX; cursorY = e.clientY;
+    });
+
+    function renderCursor() {
+      dotX += (cursorX - dotX) * 0.5;
+      dotY += (cursorY - dotY) * 0.5;
+      outlineX += (cursorX - outlineX) * 0.2;
+      outlineY += (cursorY - outlineY) * 0.2;
+
+      DOM.cDot.style.left = `${dotX}px`;
+      DOM.cDot.style.top = `${dotY}px`;
+      DOM.cOutline.style.left = `${outlineX}px`;
+      DOM.cOutline.style.top = `${outlineY}px`;
+
+      requestAnimationFrame(renderCursor);
+    }
+    renderCursor();
+
+    window.addEventListener('mousedown', () => document.body.classList.add('cursor-active'));
+    window.addEventListener('mouseup', () => document.body.classList.remove('cursor-active'));
+
+    function bindMagneticHover() {
+      document.querySelectorAll('[data-hover], .game-tile, button, input').forEach(el => {
+        el.addEventListener('mouseenter', () => document.body.classList.add('cursor-hover'));
+        el.addEventListener('mouseleave', () => document.body.classList.remove('cursor-hover'));
+      });
+    }
+
+    function decryptText(element, originalText) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*";
+      let iterations = 0;
+      const interval = setInterval(() => {
+        element.textContent = originalText.split("").map((char, index) => {
+          if (index < iterations) return originalText[index];
+          return chars[Math.floor(Math.random() * chars.length)];
+        }).join("");
+        if (iterations >= originalText.length) clearInterval(interval);
+        iterations += 1/3;
+      }, 30);
+    }
+
+    async function bootOS() {
+      setTheme(state.theme, false);
+      startClock();
+
+      const logs = [
+        "Mounting local file system...",
+        "Establishing secure connection...",
+        "Bypassing runtime restrictions...",
+        "Decrypting directory blocks..."
+      ];
+      
+      for(let i=0; i<logs.length; i++) {
+        await new Promise(r => setTimeout(r, 150));
+        const p = document.createElement('p');
+        DOM.bootLog.appendChild(p);
+        decryptText(p, `> ${logs[i]}`);
+      }
+
+      try {
+        const [dirRes, statsRes] = await Promise.all([
+          fetch(DIRECTORY_URL), fetch(STATS_URL).catch(() => ({ json: () => [] }))
+        ]);
+        
+        const rawData = await dirRes.json();
+        state.catalog = rawData.filter(i => i.id >= 0);
+        
+        const statsData = await statsRes.json();
+        if (Array.isArray(statsData)) {
+          statsData.forEach(file => {
+            const match = file.name.match(/^\/(\d+)\.html$/);
+            if (match) state.stats[match[1]] = file.hits?.total || 0;
+          });
+        }
+        
+        await new Promise(r => setTimeout(r, 400));
+        const p = document.createElement('p');
+        p.className = "text-emerald-500 font-bold mt-2";
+        DOM.bootLog.appendChild(p);
+        decryptText(p, "> System Ready. Launching UI.");
+
+        setTimeout(() => {
+          DOM.bootScreen.classList.add('opacity-0');
+          setTimeout(() => DOM.bootScreen.remove(), 700);
+          DOM.loading.classList.add('hidden');
+          buildNavigation();
+          updateView();
+          notify("System Online", "success");
+        }, 800);
+
+      } catch (err) {
+        DOM.bootLog.innerHTML += `<p class="text-rose-500 font-bold mt-2">> FATAL ERROR: ${err.message}</p>`;
+        DOM.loading.innerHTML = `<span class="text-rose-500 font-bold uppercase tracking-wider">System Exception</span><br><span class="text-xs text-slate-500 mt-2 font-mono">${err}</span>`;
+      }
+    }
+
+    function startClock() {
+      setInterval(() => {
+        const now = new Date();
+        DOM.clock.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+      }, 1000);
+    }
+
+    function notify(msg, type = 'info') {
+      const toast = document.createElement('div');
+      const borderColor = type === 'success' ? 'border-emerald-500' : 'border-brand';
+      const textColor = type === 'success' ? 'text-emerald-400' : 'text-slate-200';
+      
+      toast.className = `glass-panel px-4 py-3 rounded-lg border-l-4 ${borderColor} ${textColor} text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-slide-up flex items-center gap-3 w-64 pointer-events-auto`;
+      toast.innerHTML = `<span>${msg}</span>`;
+      
+      DOM.toastTray.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-full', 'transition-all', 'duration-300');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function updateView() {
+      let filtered = state.catalog;
+      if (state.category === 'favorites') filtered = filtered.filter(g => state.favorites.includes(g.id));
+      else if (state.category !== 'all') filtered = filtered.filter(g => g.special?.includes(state.category));
+
+      if (state.search) {
+        filtered = filtered.filter(g => g.name.toLowerCase().includes(state.search));
+        DOM.recentWrapper.classList.add('hidden');
+      } else if (state.category === 'all' && state.recent.length > 0) {
+        DOM.recentWrapper.classList.remove('hidden');
+        renderGrid(state.recent.map(id => state.catalog.find(g => g.id === id)).filter(g => g), DOM.recentGrid, true);
+      } else {
+        DOM.recentWrapper.classList.add('hidden');
+      }
+
+      filtered.sort((a, b) => {
+        if (state.sort === 'popular') return (state.stats[b.id] || 0) - (state.stats[a.id] || 0);
+        if (state.sort === 'az') return a.name.localeCompare(b.name);
+        if (state.sort === 'new') return b.id - a.id;
+      });
+
+      DOM.count.textContent = filtered.length;
+      renderGrid(filtered, DOM.grid);
+      bindMagneticHover();
+    }
+
+    function renderGrid(list, container, isHorizontal = false) {
+      container.innerHTML = "";
+      if (list.length === 0 && !isHorizontal) {
+        container.innerHTML = `<div class="col-span-full py-20 text-center text-slate-500 font-bold tracking-widest uppercase text-xs">No records match query.</div>`;
+        return;
+      }
+
+      list.forEach((game, index) => {
+        const isFav = state.favorites.includes(game.id);
+        const coverSrc = game.cover.replace("{COVER_URL}", COVER_BASE);
+        const plays = state.stats[game.id] ? formatNumber(state.stats[game.id]) : 'NEW';
+
+        const card = document.createElement('div');
+        card.style.animationDelay = `${(index % 12) * 0.03}s`;
+        card.className = `game-tile glass-card rounded-2xl overflow-hidden cursor-pointer group flex flex-col animate-slide-up opacity-0 snap-start shrink-0 ${isHorizontal ? "w-44 h-56" : "aspect-[3/4]"}`;
+        
+        card.innerHTML = `
+          <div class="card-img-wrap relative flex-1 overflow-hidden bg-slate-950">
+            <img src="${coverSrc}" alt="${game.name}" loading="lazy" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwZjE3MmEiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiLz48L3N2Zz4='"/>
+            <div class="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/70 backdrop-blur-md rounded border border-white/5 text-[9px] font-mono font-bold text-slate-300 z-10">${plays}</div>
+            <button data-hover class="fav-btn absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-all z-20 ${isFav ? 'bg-brand text-white shadow-[0_0_12px_var(--theme-glow)]' : 'bg-black/50 text-white/50 hover:bg-white/20 hover:text-white'}" data-id="${game.id}">
+              <svg class="w-3.5 h-3.5" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            </button>
+            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+              <div class="w-10 h-10 rounded-full bg-brand flex items-center justify-center shadow-[0_0_20px_var(--theme-glow)] text-white transform scale-50 group-hover:scale-100 transition-transform duration-300">
+                <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4l12 6-12 6z"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="p-3.5 bg-slate-900/90 shrink-0 border-t border-slate-800/80 relative z-10">
+            <h3 class="text-xs font-bold text-slate-100 truncate">${game.name}</h3>
+            <p class="text-[9px] font-mono text-slate-500 truncate mt-1 uppercase">${game.author || 'SYSTEM'}</p>
+          </div>
+        `;
+
+        card.onclick = (e) => { if(!e.target.closest('.fav-btn')) launchGame(game); };
+        const btn = card.querySelector('.fav-btn');
+        btn.onclick = (e) => { e.stopPropagation(); toggleFavorite(game.id, btn, game.name); };
+        container.appendChild(card);
+      });
+    }
+
+    function buildNavigation() {
+      const tags = [...new Set(state.catalog.flatMap(g => g.special || []))].filter(t => t);
+      const cats = [
+        { id: 'all', n: 'Directory', i: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>' },
+        { id: 'favorites', n: 'Saved Items', i: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>' }
+      ];
+      tags.forEach(t => cats.push({ id: t, n: t, i: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>' }));
+
+      DOM.nav.innerHTML = '';
+      cats.forEach(c => {
+        const btn = document.createElement('button');
+        btn.setAttribute('data-hover', 'true');
+        const isActive = state.category === c.id;
+        btn.className = `w-full flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${isActive ? 'bg-brand/10 text-brand border border-brand/30 shadow-[inset_0_0_15px_var(--theme-glow)]' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white border border-transparent'}`;
+        btn.innerHTML = `<svg class="w-4 h-4 shrink-0" fill="${c.id==='favorites'?'currentColor':'none'}" viewBox="0 0 24 24" stroke="currentColor">${c.i}</svg><span class="hidden lg:block truncate">${c.n}</span>`;
+        btn.onclick = () => { state.category = c.id; DOM.title.textContent = c.n; state.search = ''; DOM.search.value = ''; buildNavigation(); updateView(); };
+        DOM.nav.appendChild(btn);
+      });
+      bindMagneticHover();
+    }
+
+    function toggleFavorite(id, btn, name) {
+      const idx = state.favorites.indexOf(id);
+      if (idx > -1) {
+        state.favorites.splice(idx, 1);
+        btn.className = "fav-btn absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-all z-20 bg-black/50 text-white/50 hover:bg-white/20 hover:text-white";
+        btn.querySelector('svg').setAttribute('fill', 'none');
+        notify(`Removed ${name}`, 'info');
+      } else {
+        state.favorites.push(id);
+        btn.className = "fav-btn absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-all z-20 bg-brand text-white shadow-[0_0_12px_var(--theme-glow)]";
+        btn.querySelector('svg').setAttribute('fill', 'currentColor');
+        notify(`Saved ${name}`, 'success');
+      }
+      localStorage.setItem('cw_favs', JSON.stringify(state.favorites));
+      if (state.category === 'favorites') updateView();
+    }
+
+    // --- NATIVE FILE LOAD FIX ---
+    function launchGame(game) {
+      state.recent = state.recent.filter(i => i !== game.id);
+      state.recent.unshift(game.id);
+      if (state.recent.length > 10) state.recent.pop();
+      localStorage.setItem('cw_recent', JSON.stringify(state.recent));
+      if (state.category === 'all') renderGrid(state.recent.map(id => state.catalog.find(g => g.id === id)).filter(g => g), DOM.recentGrid, true);
+
+      DOM.mTitle.textContent = game.name;
+      DOM.mAuthor.textContent = game.author ? `DEV // ${game.author.toUpperCase()}` : 'DEV // SYSTEM';
+      
+      DOM.frame.style.opacity = '0';
+      DOM.frame.src = "about:blank";
+      
+      DOM.modal.classList.remove('hidden');
+      setTimeout(() => DOM.modal.classList.remove('opacity-0'), 10);
+
+      const url = game.url.startsWith("http") ? game.url : game.url.replace("{HTML_URL}", HTML_BASE).replace("{COVER_URL}", COVER_BASE);
+      document.getElementById('newTabBtn').onclick = () => window.open(url, "_blank");
+
+      // Load Natively (Fixes Unity & Minecraft Service Workers)
+      DOM.frame.src = url;
+
+      DOM.frame.onload = () => {
+        DOM.frame.style.opacity = '1';
+        DOM.frame.focus();
+        DOM.frame.contentWindow.focus();
+      };
+      
+      notify(`Booting ${game.name}...`, 'info');
+    }
+
+    // --- Modals & Settings ---
+    function openSettings() {
+      const modal = document.getElementById('settingsModal');
+      const box = document.getElementById('settingsBox');
+      modal.classList.remove('hidden');
+      setTimeout(() => { modal.classList.remove('opacity-0'); box.classList.remove('scale-95'); }, 10);
+    }
+    
+    function closeSettings() {
+      const modal = document.getElementById('settingsModal');
+      const box = document.getElementById('settingsBox');
+      modal.classList.add('opacity-0'); box.classList.add('scale-95');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    function setTheme(color, showToast=true) {
+      state.theme = color;
+      document.documentElement.setAttribute('data-theme', color);
+      localStorage.setItem('cw_theme', color);
+      if(showToast) notify(`Theme updated to ${color.toUpperCase()}`, 'success');
+    }
+
+    function panic() {
+      window.location.replace("https://classroom.google.com");
+    }
+
+    // --- Listeners ---
+    DOM.search.addEventListener('input', (e) => { state.search = e.target.value.toLowerCase(); updateView(); });
+    DOM.sort.addEventListener('change', (e) => { state.sort = e.target.value; updateView(); });
+
+    const closeModal = () => {
+      DOM.modal.classList.add('opacity-0');
+      setTimeout(() => { 
+        DOM.modal.classList.add('hidden'); 
+        DOM.frame.src = "about:blank"; 
+        notify("Game terminated.", "info");
+      }, 300);
+    };
+    document.getElementById('closeBtn').onclick = closeModal;
+    document.getElementById('fullscreenBtn').onclick = () => { if (DOM.frame.requestFullscreen) DOM.frame.requestFullscreen(); else if (DOM.frame.webkitRequestFullscreen) DOM.frame.webkitRequestFullscreen(); };
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '`' || e.key === '~') { e.preventDefault(); panic(); }
+      if (e.key === '/' && document.activeElement !== DOM.search) { e.preventDefault(); DOM.search.focus(); }
+      if (e.key === 'Escape') {
+        if (!DOM.modal.classList.contains('hidden')) closeModal();
+        else if (!document.getElementById('settingsModal').classList.contains('hidden')) closeSettings();
+      }
+    });
+
+    window.tabCloak = function() {
+      document.title = "Google Docs";
+      let link = document.querySelector("link[rel~='icon']") || document.createElement('link');
+      link.rel = 'icon'; link.href = "https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico"; 
+      document.head.appendChild(link);
+      notify("Stealth Cloak Activated", "success");
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toString();
+    }
+
+    bootOS();
+  </script>
+</body>
+</html>
